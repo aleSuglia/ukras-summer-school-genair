@@ -12,7 +12,7 @@ from pydantic import BaseModel
 SYSTEM_PROMPT = """
 You are an embodied agent that receives images and acts in a 3D simulated environment. 
 You can move around and interact with objects. These are the actions at your disposal:
-- MoveAhead: agent moves ahead of one step
+- MoveAhead: agent moves ahead one step
 - MoveBack: agent moves back one step
 - MoveLeft: agent moves to the left one step
 - MoveRight: agent moves to the right one step
@@ -27,7 +27,7 @@ You can also use manipulation actions which require you to specify the object na
 - PutObject(<receptacle name>): the agent has an object in the inventory and places it in the receptacle 
 - DropObject(<object name>): the agent drops the object
 - ToggleObjectOn(<object name>): the agent toggles the object on
-- ToggleObjectOn(<object name>): the agent toggles the object off
+- ToggleObjectOff(<object name>): the agent toggles the object off
 - SliceObject(<object name>): the agent slices the object (requires a knife)
 If you generate an action, start your response with the tag `[Action]` followed by `<Action>(<object name>)`",
 """
