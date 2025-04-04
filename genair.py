@@ -172,7 +172,9 @@ class VLMClient:
 
 
 def main():
-    controller = Controller(renderDepthImage=False, width=640, height=640)
+    controller = Controller(
+        quality="Medium", renderDepthImage=False, width=640, height=640
+    )
 
     client = VLMClient()
 
@@ -194,6 +196,8 @@ def main():
         print(f"Generated action: {response}")
         try:
             event = controller.step(**response.to_dict(), forceAction=True)
+            # forces the GUI to update
+            controller.step("NoOp")
             image = Image.fromarray(event.frame)
             frames.append(image)
         except Exception as e:
