@@ -29,7 +29,8 @@ You can also use manipulation actions which require you to specify the object na
 - ToggleObjectOn(<object name>): the agent toggles the object on
 - ToggleObjectOff(<object name>): the agent toggles the object off
 - SliceObject(<object name>): the agent slices the object (requires a knife)
-If you generate an action, start your response with the tag `[Action]` followed by `<Action>(<object name>)`",
+If you generate an action, start your response with the tag `[Action]` and follow the format of the
+action.",
 """
 
 client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
@@ -52,7 +53,7 @@ class AgentActionResponse(AgentResponse):
     degrees: Optional[float] = None
 
 
-class VLMClient:
+class LLMClient:
     # You can pass in the model name as a string
     # make sure that you "pull" the model first using ollama pull <model_name>
     def __init__(self, model_name="qwen2.5:1.5b"):
@@ -75,7 +76,7 @@ class VLMClient:
         object_id = None
 
         for visible_object_id in visible_objects_ids:
-            if raw_object_id in visible_object_id:
+            if raw_object_id.lower() in visible_object_id.lower():
                 object_id = visible_object_id
                 break
 
@@ -134,8 +135,6 @@ class VLMClient:
             return AgentTextualResponse(response=verbal_response)
 
     def act(self, env_observation, language_input):
-        # pil_image = Image.fromarray(env_observation.frame)
-        # image = self._image_to_bytes(pil_image)
         visible_objects = [
             o["objectId"] for o in env_observation.metadata["objects"] if o["visible"]
         ]
@@ -154,17 +153,12 @@ class VLMClient:
                     {
                         "role": "user",
                         "content": language_input,
-                        # "images": [image],
                     },
                 ],
-                # response_format=AgentResponse,
             )
 
             raw_response = completion.choices[0].message.content
-            # if action_response.parsed:
-            #     print(action_response.parsed)
-            # elif action_response.refusal:
-            #     print(action_response.refusal)
+            print(f"Raw response: {raw_response}")
         except Exception as e:
             print(f"Error: {e}")
 
@@ -176,7 +170,7 @@ def main():
         quality="Medium", renderDepthImage=False, width=640, height=640
     )
 
-    client = VLMClient()
+    client = LLMClient()
 
     frames = []
     event = controller.step("Initialize")
@@ -193,15 +187,18 @@ def main():
 
         print("Processing instruction...")
         response = client.act(event, language_instruction)
-        print(f"Generated action: {response}")
-        try:
-            event = controller.step(**response.to_dict(), forceAction=True)
-            # forces the GUI to update
-            controller.step("NoOp")
-            image = Image.fromarray(event.frame)
-            frames.append(image)
-        except Exception as e:
-            print(f"Unable to execute action due to an error: {e}")
+        if isinstance(response, AgentTextualResponse):
+            print(f"Generated response: {response.response}")
+        else:
+            print(f"Generated action: {response}")
+            try:
+                event = controller.step(**response.to_dict(), forceAction=True)
+                # forces the GUI to update
+                controller.step("NoOp")
+                image = Image.fromarray(event.frame)
+                frames.append(image)
+            except Exception as e:
+                print(f"Unable to execute action due to an error: {e}")
 
     # Encode all frames into a mp4 video.
     video_path = "rollout.mp4"
