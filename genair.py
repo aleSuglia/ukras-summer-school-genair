@@ -33,24 +33,24 @@ You can also use manipulation actions which require you to specify the object na
 - SliceObject(<object name>): the agent slices the object (requires a knife)
 If you generate an action, start your response with the tag `[Action]` and follow the format of the
 action. 
-Respond to the instruction with the action you would like to take.",
+When answering a question, use the tag `[Say]` to generate a verbal response.",
 """
 
 client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
 
 
-class AgentResponse(BaseModel):
+class BaseAgentResponse(BaseModel):
     def to_dict(self):
         current_dict = self.model_dump(mode="python")
 
         return {key: value for key, value in current_dict.items() if value is not None}
 
 
-class AgentTextualResponse(AgentResponse):
+class AgentTextualResponse(BaseAgentResponse):
     response: str
 
 
-class AgentActionResponse(AgentResponse):
+class AgentActionResponse(BaseAgentResponse):
     action: str
     objectId: Optional[str] = None
     degrees: Optional[float] = None
@@ -67,7 +67,7 @@ class VLMClient:
         print("Model history reset...")
         self.history = []
 
-    def encode_image(self, image: Image):
+    def encode_image(self, image: Image) -> str:
         # Convert the PIL image to a byte stream
         buffered = io.BytesIO()
         image.save(buffered, format="PNG")
@@ -76,7 +76,7 @@ class VLMClient:
         # Encode the byte stream to base64
         return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
-    def _get_object_id(self, raw_object_id, env_observation):
+    def _get_object_id(self, raw_object_id: str, env_observation) -> Optional[str]:
         visible_objects_ids = [
             o["objectId"] for o in env_observation.metadata["objects"] if o["visible"]
         ]
@@ -89,7 +89,7 @@ class VLMClient:
 
         return object_id
 
-    def postprocess_response(self, env_observation, response):
+    def postprocess_response(self, env_observation, response) -> BaseAgentResponse:
         if response.startswith("[Action]"):
             raw_action = response.replace("[Action]", "").strip()
 
@@ -141,7 +141,7 @@ class VLMClient:
             verbal_response = response.replace("[Say]", "").strip()
             return AgentTextualResponse(response=verbal_response)
 
-    def act(self, env_observation, language_input):
+    def act(self, env_observation, language_input) -> BaseAgentResponse:
         pil_image = Image.fromarray(env_observation.frame)
         base64_image = self.encode_image(pil_image)
 
@@ -200,15 +200,19 @@ def main():
 
         print("Processing instruction...")
         response = client.act(event, language_instruction)
-        print(f"Generated action: {response}")
-        try:
-            event = controller.step(**response.to_dict(), forceAction=True)
-            # forces the GUI to update
-            controller.step("NoOp")
-            image = Image.fromarray(event.frame)
-            frames.append(image)
-        except Exception as e:
-            print(f"Unable to execute action due to an error: {e}")
+
+        if isinstance(response, AgentTextualResponse):
+            print(f"Generated response: {response.response}")
+        else:
+            print(f"Generated action: {response}")
+            try:
+                event = controller.step(**response.to_dict(), forceAction=True)
+                # forces the GUI to update
+                controller.step("NoOp")
+                image = Image.fromarray(event.frame)
+                frames.append(image)
+            except Exception as e:
+                print(f"Unable to execute action due to an error: {e}")
 
     # Encode all frames into a mp4 video.
     video_path = "rollout.mp4"
