@@ -31,10 +31,9 @@ You can also use manipulation actions which require you to specify the object na
 - ToggleObjectOn(<object name>): the agent toggles the object on
 - ToggleObjectOff(<object name>): the agent toggles the object off
 - SliceObject(<object name>): the agent slices the object (requires a knife)
-If you generate an action, start your response with the tag `[Action]` followed by
-`<Action>(<object name>)`. 
-Respond to the instruction with the action you would like to take.
-",
+If you generate an action, start your response with the tag `[Action]` and follow the format of the
+action. 
+Respond to the instruction with the action you would like to take.",
 """
 
 client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
@@ -60,7 +59,7 @@ class AgentActionResponse(AgentResponse):
 class VLMClient:
     # You can pass in the model name as a string
     # make sure that you "pull" the model first using ollama pull <model_name>
-    def __init__(self, model_name="moondream"):
+    def __init__(self, model_name="gemma3:4b"):
         self.model_name = model_name
         self.history = []
 
@@ -84,7 +83,7 @@ class VLMClient:
         object_id = None
 
         for visible_object_id in visible_objects_ids:
-            if raw_object_id in visible_object_id:
+            if raw_object_id.lower() in visible_object_id.lower():
                 object_id = visible_object_id
                 break
 
@@ -151,7 +150,7 @@ class VLMClient:
                 temperature=0,
                 model=self.model_name,
                 messages=[
-                    # {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": SYSTEM_PROMPT},
                     {
                         "role": "user",
                         "content": [
