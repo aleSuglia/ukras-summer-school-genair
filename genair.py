@@ -1,3 +1,4 @@
+import base64
 import io
 import re
 from typing import Optional
@@ -10,7 +11,8 @@ from PIL import Image
 from pydantic import BaseModel
 
 SYSTEM_PROMPT = """
-You are an embodied agent that receives images and acts in a 3D simulated environment. 
+You are an embodied agent that receives images and acts in a 3D simulated environment. Your task is
+to follow the instructions provided by the user. 
 You can move around and interact with objects. These are the actions at your disposal:
 - MoveAhead: agent moves ahead one step
 - MoveBack: agent moves back one step
@@ -29,7 +31,10 @@ You can also use manipulation actions which require you to specify the object na
 - ToggleObjectOn(<object name>): the agent toggles the object on
 - ToggleObjectOff(<object name>): the agent toggles the object off
 - SliceObject(<object name>): the agent slices the object (requires a knife)
-If you generate an action, start your response with the tag `[Action]` followed by `<Action>(<object name>)`",
+If you generate an action, start your response with the tag `[Action]` followed by
+`<Action>(<object name>)`. 
+Respond to the instruction with the action you would like to take.
+",
 """
 
 client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
@@ -55,7 +60,7 @@ class AgentActionResponse(AgentResponse):
 class VLMClient:
     # You can pass in the model name as a string
     # make sure that you "pull" the model first using ollama pull <model_name>
-    def __init__(self, model_name="qwen2.5:1.5b"):
+    def __init__(self, model_name="moondream"):
         self.model_name = model_name
         self.history = []
 
@@ -63,10 +68,14 @@ class VLMClient:
         print("Model history reset...")
         self.history = []
 
-    def _image_to_bytes(self, image: Image):
-        img_byte_arr = io.BytesIO()
-        image.save(img_byte_arr, format="PNG")
-        return img_byte_arr.getvalue()
+    def encode_image(self, image: Image):
+        # Convert the PIL image to a byte stream
+        buffered = io.BytesIO()
+        image.save(buffered, format="PNG")
+        buffered.seek(0)
+
+        # Encode the byte stream to base64
+        return base64.b64encode(buffered.getvalue()).decode("utf-8")
 
     def _get_object_id(self, raw_object_id, env_observation):
         visible_objects_ids = [
@@ -134,27 +143,26 @@ class VLMClient:
             return AgentTextualResponse(response=verbal_response)
 
     def act(self, env_observation, language_input):
-        # pil_image = Image.fromarray(env_observation.frame)
-        # image = self._image_to_bytes(pil_image)
-        visible_objects = [
-            o["objectId"] for o in env_observation.metadata["objects"] if o["visible"]
-        ]
-        objects_str = "\n".join(visible_objects)
+        pil_image = Image.fromarray(env_observation.frame)
+        base64_image = self.encode_image(pil_image)
 
         try:
             completion = client.chat.completions.create(
                 temperature=0,
                 model=self.model_name,
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    # {"role": "system", "content": SYSTEM_PROMPT},
                     {
                         "role": "user",
-                        "content": f"Visible objects: {objects_str}",
-                    },
-                    {
-                        "role": "user",
-                        "content": language_input,
-                        # "images": [image],
+                        "content": [
+                            {
+                                "type": "image_url",
+                                "image_url": {
+                                    "url": f"data:image/png;base64,{base64_image}"
+                                },
+                            },
+                            {"type": "text", "text": language_input},
+                        ],
                     },
                 ],
                 # response_format=AgentResponse,
@@ -166,7 +174,7 @@ class VLMClient:
             # elif action_response.refusal:
             #     print(action_response.refusal)
         except Exception as e:
-            print(f"Error: {e}")
+            raise ValueError(f"Error: {e}")
 
         return self.postprocess_response(env_observation, raw_response)
 
