@@ -8,6 +8,7 @@ from ai2thor.controller import Controller
 from ai2thor.server import Event
 from openai import OpenAI
 from PIL import Image, ImageDraw, ImageFont
+import textwrap
 from pydantic import BaseModel
 
 SYSTEM_PROMPT = """
@@ -266,8 +267,8 @@ class LLMClient:
 
 
 def render_text_on_image(language_instruction: str, width: int, height: int) -> None:
-    # Render the language instruction as an image
-    font_size = 35
+    # Render the language instruction as an image - handle multi-line text
+    font_size = 55
     try:
         # Create a blank image with white background
         text_image = Image.new("RGB", (width, height), "white")
@@ -279,17 +280,24 @@ def render_text_on_image(language_instruction: str, width: int, height: int) -> 
         except IOError:
             font = ImageFont.load_default()
 
-        # Calculate text position to center it
-        text_width = draw.textlength(language_instruction, font=font)
-        text_height = font_size
+        # Wrap the text to fit within max_width
+        max_width = 2000   
+        lines = textwrap.wrap(language_instruction, width=int(max_width / (font_size / 2)))  # Adjust divisor for char width
 
-        text_position = (
-            (text_image.width - text_width) // 2,
-            (text_image.height - text_height) // 2,
-        )
+        # Set the line height
+        line_height = 20 
+        
+        # Calculate total text height
+        total_text_height = len(lines) * line_height
 
-        # Draw the text on the image
-        draw.text(text_position, language_instruction, fill="black", font=font)
+         # Calculate starting y position to center the text vertically
+        y = (height - total_text_height) // 2
+        
+        # Draw each line of text
+        for line in lines:
+            draw.text((50, y), line, fill="black", font=font)  # 10 is the left margin
+            y += line_height  # Move to the next line
+
 
         return text_image
     except Exception as e:
@@ -327,7 +335,7 @@ def main() -> None:
     # For this example, we will use the first scene in the list of available scenes.
     # You can change this to any other scene by changing the index.
     # https://ai2thor.allenai.org/ithor/documentation/scenes
-    kitchen_scene = all_scenes[0]
+    kitchen_scene = all_scenes[24]
     controller.reset(
         scene=kitchen_scene,
     )
@@ -367,6 +375,10 @@ def main() -> None:
         response = client.act(event, language_instruction)
         if isinstance(response, AgentTextualResponse):
             print(f"Generated response: {response.response}")
+            robot_text=response.response
+            formatted_robot_response = robot_text.replace(".", "\n")
+            robot_text_image = render_text_on_image(formatted_robot_response, 640, 640)
+            frames.append(robot_text_image)
         else:
             print(f"Generated action: {response}")
             try:
