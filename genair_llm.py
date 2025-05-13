@@ -31,7 +31,7 @@ You can also use manipulation actions which require you to specify the object na
 - ToggleObjectOff(<object name>): the agent toggles the object off
 - SliceObject(<object name>): the agent slices the object (requires a knife)
 If you generate an action, start your response with the tag `[Action]` and follow the format of the
-action.",
+action. Never put quotes around the object name. For example: [Action] OpenObject(Fridge)",
 """
 
 client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
@@ -142,10 +142,12 @@ class LLMClient:
         for visible_object_id in visible_objects_ids:
             if raw_object_id.lower() in visible_object_id.lower():
                 object_id = visible_object_id
+                print("Found object ID: %s", object_id)
                 break
 
         return object_id
-
+    
+    
     def postprocess_response(
         self, env_observation: Event, response: str
     ) -> AgentResponse:
@@ -185,7 +187,8 @@ class LLMClient:
 
                 if match:
                     action = match.group(1)
-                    raw_object_id = match.group(2)
+                    raw_object_id = match.group(2).strip()
+                    print(f"raw_object_id: {raw_object_id}")
 
                     object_id = self._get_object_id(raw_object_id, env_observation)
                     if object_id is None:
@@ -247,8 +250,17 @@ class LLMClient:
 
             raw_response = completion.choices[0].message.content
             print(f"Raw response: {raw_response}")
+            pattern = r"\[Action\] (\w+):? (\w+)"
+            match = re.search(pattern,raw_response)
+            if match:
+                    action = match.group(1)
+                    object_name = match.group(2).strip('\"').strip(")")
+    
+                    standardized_response=f"[Action] {action}({object_name})"
+                    print(f"Standardized raw response: {standardized_response}")
+                    return self.postprocess_response(env_observation, standardized_response) 
         except Exception as e:
-            print(f"Error: {e}")
+                    print(f"Error: {e}")
 
         return self.postprocess_response(env_observation, raw_response)
 
@@ -342,8 +354,8 @@ def main() -> None:
     while not done:
         image = Image.fromarray(event.frame)
         frames.append(image)
-        language_instruction = input("Enter instruction (enter CLOSE to exit): ")
-        if language_instruction == "CLOSE":
+        language_instruction = input("Enter instruction (enter CLOSE or x to exit): ")
+        if language_instruction == "CLOSE" or language_instruction == "x":
             print("Interrupting task...")
             break
 
