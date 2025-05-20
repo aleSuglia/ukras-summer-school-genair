@@ -8,6 +8,7 @@ from ai2thor.controller import Controller
 from ai2thor.server import Event
 from openai import OpenAI
 from PIL import Image, ImageDraw, ImageFont
+import textwrap
 from pydantic import BaseModel
 
 SYSTEM_PROMPT = """
@@ -31,7 +32,7 @@ You can also use manipulation actions which require you to specify the object na
 - ToggleObjectOff(<object name>): the agent toggles the object off
 - SliceObject(<object name>): the agent slices the object (requires a knife)
 If you generate an action, start your response with the tag `[Action]` and follow the format of the
-action.",
+action. Never put quotes around the object name. For example: [Action] OpenObject(Fridge)",
 """
 
 client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
@@ -142,10 +143,12 @@ class LLMClient:
         for visible_object_id in visible_objects_ids:
             if raw_object_id.lower() in visible_object_id.lower():
                 object_id = visible_object_id
+                print("Found object ID: %s", object_id)
                 break
 
         return object_id
-
+    
+    
     def postprocess_response(
         self, env_observation: Event, response: str
     ) -> AgentResponse:
@@ -185,7 +188,8 @@ class LLMClient:
 
                 if match:
                     action = match.group(1)
-                    raw_object_id = match.group(2)
+                    raw_object_id = match.group(2).strip()
+                    print(f"raw_object_id: {raw_object_id}")
 
                     object_id = self._get_object_id(raw_object_id, env_observation)
                     if object_id is None:
@@ -247,15 +251,24 @@ class LLMClient:
 
             raw_response = completion.choices[0].message.content
             print(f"Raw response: {raw_response}")
+            pattern = r"\[Action\] (\w+):? (\w+)"
+            match = re.search(pattern,raw_response)
+            if match:
+                    action = match.group(1)
+                    object_name = match.group(2).strip('\"').strip(")")
+    
+                    standardized_response=f"[Action] {action}({object_name})"
+                    print(f"Standardized raw response: {standardized_response}")
+                    return self.postprocess_response(env_observation, standardized_response) 
         except Exception as e:
-            print(f"Error: {e}")
+                    print(f"Error: {e}")
 
         return self.postprocess_response(env_observation, raw_response)
 
 
 def render_text_on_image(language_instruction: str, width: int, height: int) -> None:
-    # Render the language instruction as an image
-    font_size = 35
+    # Render the language instruction as an image - handle multi-line text
+    font_size = 55
     try:
         # Create a blank image with white background
         text_image = Image.new("RGB", (width, height), "white")
@@ -267,17 +280,24 @@ def render_text_on_image(language_instruction: str, width: int, height: int) -> 
         except IOError:
             font = ImageFont.load_default()
 
-        # Calculate text position to center it
-        text_width = draw.textlength(language_instruction, font=font)
-        text_height = font_size
+        # Wrap the text to fit within max_width
+        max_width = 2000   
+        lines = textwrap.wrap(language_instruction, width=int(max_width / (font_size / 2)))  # Adjust divisor for char width
 
-        text_position = (
-            (text_image.width - text_width) // 2,
-            (text_image.height - text_height) // 2,
-        )
+        # Set the line height
+        line_height = 20 
+        
+        # Calculate total text height
+        total_text_height = len(lines) * line_height
 
-        # Draw the text on the image
-        draw.text(text_position, language_instruction, fill="black", font=font)
+         # Calculate starting y position to center the text vertically
+        y = (height - total_text_height) // 2
+        
+        # Draw each line of text
+        for line in lines:
+            draw.text((50, y), line, fill="black", font=font)  # 10 is the left margin
+            y += line_height  # Move to the next line
+
 
         return text_image
     except Exception as e:
@@ -315,7 +335,7 @@ def main() -> None:
     # For this example, we will use the first scene in the list of available scenes.
     # You can change this to any other scene by changing the index.
     # https://ai2thor.allenai.org/ithor/documentation/scenes
-    kitchen_scene = all_scenes[0]
+    kitchen_scene = all_scenes[24]
     controller.reset(
         scene=kitchen_scene,
     )
@@ -342,8 +362,8 @@ def main() -> None:
     while not done:
         image = Image.fromarray(event.frame)
         frames.append(image)
-        language_instruction = input("Enter instruction (enter CLOSE to exit): ")
-        if language_instruction == "CLOSE":
+        language_instruction = input("Enter instruction (enter CLOSE or x to exit): ")
+        if language_instruction == "CLOSE" or language_instruction == "x":
             print("Interrupting task...")
             break
 
@@ -355,6 +375,10 @@ def main() -> None:
         response = client.act(event, language_instruction)
         if isinstance(response, AgentTextualResponse):
             print(f"Generated response: {response.response}")
+            robot_text=response.response
+            formatted_robot_response = robot_text.replace(".", "\n")
+            robot_text_image = render_text_on_image(formatted_robot_response, 640, 640)
+            frames.append(robot_text_image)
         else:
             print(f"Generated action: {response}")
             try:
