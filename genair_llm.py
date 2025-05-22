@@ -11,28 +11,8 @@ from PIL import Image, ImageDraw, ImageFont
 import textwrap
 from pydantic import BaseModel
 
+# TODO: add a prompt to the model
 SYSTEM_PROMPT = """
-You are an embodied agent that receives images and acts in a 3D simulated environment. 
-You can move around and interact with objects. These are the actions at your disposal:
-- MoveAhead: agent moves ahead one step
-- MoveBack: agent moves back one step
-- MoveLeft: agent moves to the left one step
-- MoveRight: agent moves to the right one step
-- RotateRight(degrees): agent rotates to the right by a given number of degrees
-- RotateLeft(degrees): agent rotates to the left by a given number of degrees
-- LookUp: agent looks up
-- LookDown: agent looks down
-You can also use manipulation actions which require you to specify the object name of a visible object:
-- OpenObject(<object name>): agent opens the object
-- CloseObject(<object name>): agent closes the object
-- PickupObject(<object name>): agent picks up the object and places it in the inventory
-- PutObject(<receptacle name>): the agent has an object in the inventory and places it in the receptacle 
-- DropObject(<object name>): the agent drops the object
-- ToggleObjectOn(<object name>): the agent toggles the object on
-- ToggleObjectOff(<object name>): the agent toggles the object off
-- SliceObject(<object name>): the agent slices the object (requires a knife)
-If you generate an action, start your response with the tag `[Action]` and follow the format of the
-action. Never put quotes around the object name. For example: [Action] OpenObject(Fridge)",
 """
 
 client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
