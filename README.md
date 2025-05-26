@@ -69,6 +69,7 @@ Start with the following system prompt, and test whether the system can a) carry
 described in the prompt, b) respond to chit-chat (e.g. "How are you?") , c) answer general
 knowledge questions (e.g. "What is france"?).  
 
+You can play a video of your interaction using the command: *fplay rollout.mp4* 
 Note down any errors that you encounter. 
 
 ```python
