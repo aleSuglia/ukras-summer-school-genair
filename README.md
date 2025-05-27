@@ -86,7 +86,8 @@ You can also use manipulation actions which require you to specify the object na
 
 OpenObject(<object name>): agent opens the object 
 
-If you generate an action, start your response with the tag `[Action]` followed by `<Action>(<object name>)`",   
+If you generate an action, start your response with the tag `[Action]` and follow the format of the
+action. Never put quotes around the object name. For example: [Action] OpenObject(Fridge)",   
 """
 ``` 
 
